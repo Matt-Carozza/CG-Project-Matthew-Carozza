@@ -107,13 +107,11 @@ function copyVec3(a) {
 }
 
 /* =========================================================
-   Mouse / canvas coordinate -> world unprojection
+   Mouse / canvas 
    ========================================================= */
 
 /*
   canvasToWorld(evt)
-  Converts mouse event to world-space intersection with z=0 plane.
-  Uses the same camera transforms used during rendering.
 */
 
 function canvasToWorld(evt) {
@@ -182,7 +180,7 @@ function canvasToWorld(evt) {
 
 
 /* =========================================================
-   FABRIK implementation (unchanged, minor safety fixes)
+   FABRIK implementation 
    ========================================================= */
 
 function fabrik(targetPos) {
