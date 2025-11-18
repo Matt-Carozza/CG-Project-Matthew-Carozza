@@ -167,9 +167,16 @@ function canvasToWorld(evt) {
     // normalized device coords in [0,1]
     const nx = (evt.clientX - rect.left) / rect.width;
     const ny = (evt.clientY - rect.top)  / rect.height;
-
-    // your orthographic extents (must match the values used for projection)
-    const left = -10, right = 10, bottom = -10, top = 10;
+    
+    // Match to canvas
+    const worldHeight = 20;
+    const aspect = canvas.width / canvas.height;
+    const worldWidth = worldHeight * aspect;
+    
+    const left = -worldWidth / 2;
+    const right = worldWidth / 2;
+    const bottom = -worldHeight / 2;
+    const top = worldHeight / 2;
 
     // map to world coordinates; note Y is inverted between screen and world
     const worldX = left + nx * (right - left);
@@ -332,6 +339,8 @@ window.onload = function init() {
     for (let i = 0; i < numSegments; i++) {
         joints.push(vec3(i * segmentLength, 0, 0));
     }
+    
+    resizeCanvas();
 
     setupMouse();
     render();
@@ -353,6 +362,35 @@ function setupMouse() {
     // enable hover-follow later with mousemove
     // canvas.addEventListener("mousemove", (evt) => { ... });
 }
+
+/* =========================================================
+   Screen setup
+   ========================================================= */
+function resizeCanvas() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    console.log(canvas.width - 50, canvas.height - 50);
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    
+    // Adjust orthographic projection to maintain world bounds
+    const aspect = canvas.width / canvas.height;
+    const worldHeight = 20; 
+    const worldWidth = worldHeight * aspect; 
+    projectionMatrix = ortho(-worldWidth/2, worldWidth/2, -worldHeight/2, worldHeight/2, -10, 10);
+    gl.uniformMatrix4fv(projectionMatrixLoc, false, flatten(projectionMatrix));
+}
+
+window.addEventListener('load', () => {
+    canvas = document.getElementById("gl-canvas");
+    gl = WebGLUtils.setupWebGL(canvas);
+    if (!gl) { alert("WebGL isn't available"); return; }
+
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    init(); 
+});
+
 
 /* =========================================================
    Render loop
