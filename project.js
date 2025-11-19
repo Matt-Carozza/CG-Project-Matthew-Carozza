@@ -314,8 +314,6 @@ window.addEventListener('load', () => {
 
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
-
-    init(); 
 });
 
 
