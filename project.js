@@ -39,56 +39,27 @@ var originalColorsBuffer = null;
    ========================================================= */
 
 /*
-  createSphere(latBands, longBands, radius)
+  createCircle(segments, radius)
   returns { vertices: [vec4,...], colors: [vec4,...] }
-  low-poly sphere generator (unlit, flat color per-vertex)
+  Use fan triangulation method to create a flat circle in the XY plane
 */
-function createSphere(latBands, longBands, radius) {
+function createCircle(segments, radius) {
     let verts = [];
     let cols = [];
 
-    for (let lat = 0; lat <= latBands; lat++) {
-        let theta = lat * Math.PI / latBands;
-        let sinTheta = Math.sin(theta);
-        let cosTheta = Math.cos(theta);
+    // center vertex
+    verts.push(vec4(0, 0, 0, 1));
+    cols.push(vec4(0.1, 0.7, 0.2, 1.0));
 
-        for (let lon = 0; lon <= longBands; lon++) {
-            let phi = lon * 2 * Math.PI / longBands;
-            let sinPhi = Math.sin(phi);
-            let cosPhi = Math.cos(phi);
-
-            let x = cosPhi * sinTheta;
-            let y = cosTheta;
-            let z = sinPhi * sinTheta;
-
-            // store as vec4 to match shader attribute (vPosition is vec4)
-            verts.push(vec4(radius * x, radius * y, radius * z, 1.0));
-            // flat color for body (change later if desired)
-            cols.push(vec4(0.1, 0.7, 0.2, 1.0)); // greenish
-        }
+    for (let i = 0; i <= segments; i++) {
+        let angle = (i / segments) * 2 * Math.PI;
+        let x = radius * Math.cos(angle);
+        let y = radius * Math.sin(angle);
+        verts.push(vec4(x, y, 0, 1));
+        cols.push(vec4(0.1, 0.7, 0.2, 1.0));
     }
 
-    // indices -> triangles
-    let indices = [];
-    for (let lat = 0; lat < latBands; lat++) {
-        for (let lon = 0; lon < longBands; lon++) {
-            let first = (lat * (longBands + 1)) + lon;
-            let second = first + longBands + 1;
-            indices.push(first, second, first + 1);
-            indices.push(second, second + 1, first + 1);
-        }
-    }
-
-    // expand indexed to flat triangle list
-    let outVerts = [];
-    let outCols = [];
-    for (let i = 0; i < indices.length; i++) {
-        let idx = indices[i];
-        outVerts.push(verts[idx]);
-        outCols.push(cols[idx]);
-    }
-
-    return { vertices: outVerts, colors: outCols };
+    return { vertices: verts, colors: cols };
 }
 
 /* =========================================================
@@ -201,22 +172,26 @@ function scale4(a, b, c) {
    return result;
 }
 
-// Draw a sphere mesh at position with uniform scale
-function drawSphere(position, scaleFactor) {
-    var s = scale4(scaleFactor, scaleFactor, scaleFactor);
+
+// Draw a circle (triangle fan) at position with uniform scale
+function drawCircle(position, scaleFactor) {
+    // build model matrix: translate then scale 
+    var s = scale4(scaleFactor, scaleFactor, 1.0); // keep z=1
     var instanceMatrix = mult(translate(position[0], position[1], position[2]), s);
     var t = mult(modelViewMatrix, instanceMatrix);
     gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(t));
-    gl.drawArrays(gl.TRIANGLES, 0, NumVertices);
+
+    // Draw fan
+    gl.drawArrays(gl.TRIANGLE_FAN, 0, NumVertices);
 }
 
-// Draw target sphere using a separate color buffer so body colors aren't overwritten
-function drawTargetSphere(position, scaleFactor) {
-    // bind target color buffer (attribute pointer must point to this buffer)
+
+// Draw target circle using a separate color buffer temporarily
+function drawTargetCircle(position, scaleFactor) {
     gl.bindBuffer(gl.ARRAY_BUFFER, targetCBuffer);
     gl.vertexAttribPointer(vColorLoc, 4, gl.FLOAT, false, 0, 0);
 
-    drawSphere(position, scaleFactor);
+    drawCircle(position, scaleFactor);
 
     // restore body color buffer to the attribute
     gl.bindBuffer(gl.ARRAY_BUFFER, cBuffer);
@@ -234,7 +209,6 @@ window.onload = function init() {
 
     gl.viewport(0, 0, canvas.width, canvas.height);
     gl.clearColor(1.0, 1.0, 1.0, 1.0);
-    gl.enable(gl.DEPTH_TEST);
 
     // Load shaders once
     program = initShaders(gl, "vertex-shader", "fragment-shader");
@@ -246,10 +220,10 @@ window.onload = function init() {
     modelViewMatrixLoc = gl.getUniformLocation(program, "modelViewMatrix");
     projectionMatrixLoc = gl.getUniformLocation(program, "projectionMatrix");
 
-    // Create sphere geometry (low-poly)
-    const sph = createSphere(8, 8, 0.5);
-    points = sph.vertices;
-    colors = sph.colors;
+    // Create circle geometry (low-poly)
+    const circle = createCircle(32, 0.5);
+    points = circle.vertices;
+    colors = circle.colors;
     NumVertices = points.length;
 
     // Create and fill position buffer
@@ -284,7 +258,7 @@ window.onload = function init() {
     originalColorsBuffer = flatten(colors);
 
     // Projection matrix (orthographic)
-    projectionMatrix = ortho(-10, 10, -10, 10, -10, 10);
+    projectionMatrix = ortho(-10, 10, -10, 10, 0, 1);
     gl.uniformMatrix4fv(projectionMatrixLoc, false, flatten(projectionMatrix));
 
     // Initialize joints linearly along +x
@@ -353,9 +327,8 @@ var render = function() {
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
     // camera (must match canvasToWorld)
-    modelViewMatrix = mat4();
-    modelViewMatrix = mult(modelViewMatrix, rotateY(30));
-    modelViewMatrix = mult(modelViewMatrix, rotateX(-20));
+    modelViewMatrix = mat4()
+    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(modelViewMatrix));
 
     // FABRIK update
     fabrik(target);
@@ -368,11 +341,11 @@ var render = function() {
     gl.vertexAttribPointer(vColorLoc, 4, gl.FLOAT, false, 0, 0);
 
     for (let i = 0; i < numSegments; i++) {
-        drawSphere(joints[i], 0.4);
+        drawCircle(joints[i], 0.4);
     }
 
     // Draw target last (uses target color buffer temporarily)
-    drawTargetSphere(target, 0.3);
+    drawTargetCircle(target, 0.3);
 
     requestAnimFrame(render);
 };
