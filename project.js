@@ -115,53 +115,6 @@ function copyVec3(a) {
 */
 
 function canvasToWorld(evt) {
-    // // Convert to Normalized Device Coordinates (NDC)
-    // const ndcX = (x / rect.width) * 2 - 1;
-    // const ndcY = 1 - (y / rect.height) * 2;
-
-    // // Camera transforms
-    // const cameraMV = mat4();
-    // const rotatedMV = mult(rotateY(30), rotateX(-20));
-    // const modelViewForUnProjection = mult(cameraMV, rotatedMV);
-
-    // // Compose projection * modelview
-    // const projModel = mult(projectionMatrix, modelViewForUnProjection);
-
-    // // Invert safely
-    // let invPM;
-    // try {
-    //     invPM = inverse(projModel);
-    //     if (!invPM || !invPM.every(isFinite)) throw "Invalid inverse";
-    // } catch {
-    //     // fallback: simple ortho mapping
-    //     return vec3(ndcX * 10, ndcY * 10, 0);
-    // }
-
-    // // Homogeneous clip coords (near/far)
-    // const clipNear = vec4(ndcX, ndcY, -1, 1);
-    // const clipFar  = vec4(ndcX, ndcY,  1, 1);
-
-    // const worldNearH = mult(invPM, clipNear);
-    // const worldFarH  = mult(invPM, clipFar);
-
-    // // Convert from homogeneous to 3D
-    // const worldNear = vec3(worldNearH[0] / worldNearH[3],
-    //                        worldNearH[1] / worldNearH[3],
-    //                        worldNearH[2] / worldNearH[3]);
-    // const worldFar  = vec3(worldFarH[0]  / worldFarH[3],
-    //                        worldFarH[1]  / worldFarH[3],
-    //                        worldFarH[2]  / worldFarH[3]);
-
-    // // Ray from near -> far
-    // const rayDir = subtract(worldFar, worldNear);
-
-    // // Intersect with z=0 plane
-    // if (Math.abs(rayDir[2]) < 1e-6) {
-    //     // nearly parallel
-    //     return vec3(worldNear[0], worldNear[1], 0);
-    // }
-    // const t = -worldNear[2] / rayDir[2];
-    // return add(worldNear, scale(t, rayDir));    
     const rect = canvas.getBoundingClientRect();
 
     // normalized device coords in [0,1]
