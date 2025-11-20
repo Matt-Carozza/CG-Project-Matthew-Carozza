@@ -7,9 +7,9 @@
 var canvas, gl, program;
 
 // Snake / IK parameters
-const numSegments = 24;
+const numSegments = 4;
 let joints = [];
-let segmentLength = 0.35;
+let segmentLength = 1.25;
 let target = vec3(5, 5, 0);
 
 const tolerance = 0.05;
@@ -19,6 +19,11 @@ const maxIterations = 20;
 var points = [];            // vertex positions (flattened later)
 var colors = [];            // per-vertex colors (vec4s)
 var NumVertices = 0;
+
+// link geometry for rectangles
+var linkVBuffer = null;
+var linkCBuffer = null;
+var linkNumVertices = 0;
 
 var vBuffer = null;         // position buffer
 var cBuffer = null;         // body color buffer
@@ -49,17 +54,40 @@ function createCircle(segments, radius) {
 
     // center vertex
     verts.push(vec4(0, 0, 0, 1));
-    cols.push(vec4(0.1, 0.7, 0.2, 1.0));
+    cols.push(vec4(0.545, 0.1, 0.1, 1.0));
 
     for (let i = 0; i <= segments; i++) {
         let angle = (i / segments) * 2 * Math.PI;
         let x = radius * Math.cos(angle);
         let y = radius * Math.sin(angle);
         verts.push(vec4(x, y, 0, 1));
-        cols.push(vec4(0.1, 0.7, 0.2, 1.0));
+        cols.push(vec4(0.545, 0.1, 0.1, 1.0));
     }
 
     return { vertices: verts, colors: cols };
+}
+
+function createUnitRect() {
+    // Rectangle from x = 0 --> 1, centered on y = 0
+    return {
+        vertices: [
+            vec4(0, -0.5, 0, 1),
+            vec4(1, -0.5, 0, 1),
+            vec4(1,  0.5, 0, 1),
+
+            vec4(0, -0.5, 0, 1),
+            vec4(1,  0.5, 0, 1),
+            vec4(0,  0.5, 0, 1),
+        ],
+        colors: [
+            vec4(0.6, 0.6, 0.6, 1),
+            vec4(0.6, 0.6, 0.6, 1),
+            vec4(0.6, 0.6, 0.6, 1),
+            vec4(0.6, 0.6, 0.6, 1),
+            vec4(0.6, 0.6, 0.6, 1),
+            vec4(0.6, 0.6, 0.6, 1),
+        ]
+    };
 }
 
 /* =========================================================
@@ -198,6 +226,49 @@ function drawTargetCircle(position, scaleFactor) {
     gl.vertexAttribPointer(vColorLoc, 4, gl.FLOAT, false, 0, 0);
 }
 
+// draw a rectangular link between joint A and joint B
+// thickness is in world units (height of the rectangle)
+function drawLink(jA, jB, thickness) {
+    // vector from A -> B
+    const dx = jB[0] - jA[0];
+    const dy = jB[1] - jA[1];
+    const length = Math.sqrt(dx*dx + dy*dy);
+
+    if (length < 1e-6) return; // avoid degenerate links
+
+    // angle in radians from +X to the vector A->B
+    const angleRad = Math.atan2(dy, dx);
+    // convert to degrees 
+    const angleDeg = angleRad * 180.0 / Math.PI;
+
+    // Transform: T(jA) * R(angle) * S(length, thickness, 1)
+    // unit rect spans x=0..1 so scaling by length makes x=0..length (jA->jB)
+    const instanceMatrix = mult(
+        translate(jA[0], jA[1], 0.0),
+        mult(rotateZ(-angleDeg), scale4(length, thickness, 1.0))
+    );
+    const t = mult(modelViewMatrix, instanceMatrix);
+    gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(t));
+
+    // Bind rectangle position & color buffers and draw
+    gl.bindBuffer(gl.ARRAY_BUFFER, linkVBuffer);
+    gl.vertexAttribPointer(vPositionLoc, 4, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(vPositionLoc);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, linkCBuffer);
+    gl.vertexAttribPointer(vColorLoc, 4, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(vColorLoc);
+
+    gl.drawArrays(gl.TRIANGLES, 0, linkNumVertices);
+
+    // restore circle buffers (so subsequent drawCircle calls use them)
+    gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer);
+    gl.vertexAttribPointer(vPositionLoc, 4, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, cBuffer);
+    gl.vertexAttribPointer(vColorLoc, 4, gl.FLOAT, false, 0, 0);
+}
+
+
 /* =========================================================
    Initialization and setup
    ========================================================= */
@@ -253,6 +324,18 @@ window.onload = function init() {
     }
     gl.bindBuffer(gl.ARRAY_BUFFER, targetCBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, redArray, gl.STATIC_DRAW);
+
+    // Create unit rectangle geometry for links
+    const rect = createUnitRect();
+    linkNumVertices = rect.vertices.length;
+
+    linkVBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, linkVBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, flatten(rect.vertices), gl.STATIC_DRAW);
+    
+    linkCBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, linkCBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, flatten(rect.colors), gl.STATIC_DRAW);
 
     // Save original colors (flattened Float32Array)
     originalColorsBuffer = flatten(colors);
@@ -337,6 +420,11 @@ var render = function() {
 
     gl.bindBuffer(gl.ARRAY_BUFFER, cBuffer);
     gl.vertexAttribPointer(vColorLoc, 4, gl.FLOAT, false, 0, 0);
+    
+    // Draw links first (so joints overlap them)
+    for (let i = 0; i < numSegments - 1; i++) {
+        drawLink(joints[i], joints[i + 1], 0.2);  
+    }
 
     for (let i = 0; i < numSegments; i++) {
         drawCircle(joints[i], 0.4);
