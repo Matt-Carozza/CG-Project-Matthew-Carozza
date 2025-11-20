@@ -324,7 +324,7 @@ window.onload = function init() {
     }
     gl.bindBuffer(gl.ARRAY_BUFFER, targetCBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, redArray, gl.STATIC_DRAW);
-
+    
     // Create unit rectangle geometry for links
     const rect = createUnitRect();
     linkNumVertices = rect.vertices.length;
@@ -351,6 +351,8 @@ window.onload = function init() {
     }
     
     resizeCanvas();
+    
+    window.addEventListener('resize', resizeCanvas);
 
     setupMouse();
     render();
@@ -389,16 +391,6 @@ function resizeCanvas() {
     projectionMatrix = ortho(-worldWidth/2, worldWidth/2, -worldHeight/2, worldHeight/2, -10, 10);
     gl.uniformMatrix4fv(projectionMatrixLoc, false, flatten(projectionMatrix));
 }
-
-window.addEventListener('load', () => {
-    canvas = document.getElementById("gl-canvas");
-    gl = WebGLUtils.setupWebGL(canvas);
-    if (!gl) { alert("WebGL isn't available"); return; }
-
-    resizeCanvas();
-    window.addEventListener('resize', resizeCanvas);
-});
-
 
 /* =========================================================
    Render loop
